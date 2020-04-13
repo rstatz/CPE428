@@ -12,15 +12,23 @@ img0_wpath = img0_path + png
 
 background_path = frames_dir + 'background' + png
 
+def show_img(name, img, twait) :
+    if img is None :
+        return None
+
+    cv.imshow(name, img)
+    cv.waitKey(twait)
+
+    return img
+
 def show_avg_frame(frames) :
     print('vid shape = ' + str(frames.shape))
 
     avg_frame = np.mean(frames, axis=0)
     avg_frame = avg_frame.astype('uint8')
 
-    cv.imshow('avg', avg_frame)
+    show_img('avg', avg_frame, 0)
 
-    cv.waitKey(0)
     cv.destroyAllWindows()
 
     return avg_frame
@@ -33,20 +41,17 @@ def part1() :
 
     img0 = cv.cvtColor(img0, cv.COLOR_BGR2GRAY)
 
-    if img0 is not None :
-        cv.imshow('Test', img0)
+    show_img('img0', img0, 0)
+    cv.destroyAllWindows()
 
-        cv.waitKey(0)
-        cv.destroyAllWindows()
-
-        cv.imwrite(img0_wpath, img0)
+    cv.imwrite(img0_wpath, img0)
 
 def part2():
     cap = cv.VideoCapture(frames_dir + '%06d' + jpg)
 
     frames = []
-    n = 0
 
+    # compile and show frames
     while True :
         ret, frame = cap.read()
 
@@ -55,11 +60,7 @@ def part2():
 
         frames.append(frame)
 
-        cv.imshow('frame' + str(n), frame)
-
-        if cv.waitKey(1) == ord('q') :
-            break
-        n+=1
+        show_img('vid', frame, 100)
 
     cap.release()
     cv.destroyAllWindows()
@@ -87,10 +88,38 @@ def part3() :
     cv.waitKey(0)
     cv.destroyAllWindows()
 
+def bonus() :
+    cap = cv.VideoCapture(frames_dir + '%06d' + jpg)
+    background = cv.imread(background_path, cv.IMREAD_GRAYSCALE)
+
+    while True :
+        ret, frame = cap.read()
+
+        if not ret:
+            break
+
+        # Thresholding
+        frame_gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        diff = cv.absdiff(frame_gray, background)
+        oth, othresh_img = cv.threshold(diff, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
+
+        # Bounding Boxes
+        bb_img, contours, hierarchy = cv.findContours(othresh_img, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        bb_img = cv.cvtColor(bb_img, cv.COLOR_GRAY2BGR)
+        for contour in contours :
+            x, y, w, h = cv.boundingRect(contour)
+            bb_img = cv.rectangle(bb_img, (x, y), (x + w, y + h), (0, 0, 255), 2)
+
+        show_img('vid', bb_img, 100)
+
+    cap.release()
+    cv.destroyAllWindows()
+
 def main() :
     part1()
-    #part2()
-    #part3()
+    part2()
+    part3()
+    bonus()
 
 if __name__ == "__main__" :
     main()
