@@ -41,10 +41,10 @@ def part1(vpath):
             for c in circles[0, :]:
                 center = (c[0], c[1])
                 # circle center
-                frame_circled = cv.circle(frame, center, 1, (0, 100, 100), 3)
+                frame_circled = cv.circle(frame_circled, center, 1, (0, 100, 100), 3)
                 # circle outline
                 radius = c[2]
-                frame_circled = cv.circle(frame, center, radius, (255, 0, 255), 3)
+                frame_circled = cv.circle(frame_circled, center, radius, (255, 0, 255), 3)
 
         cv.imshow(sys.argv[1], frame_circled)
 
@@ -69,7 +69,6 @@ def main():
     check_args()
 
     part1(sys.argv[1])
-
 
 if __name__ == "__main__" :
     main()
