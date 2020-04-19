@@ -1,4 +1,5 @@
 import sys
+import math
 import os.path
 import cv2 as cv
 import numpy as np
@@ -12,6 +13,7 @@ wand_path = viddir + "wand.mov"
 
 # Wand Config
 ball_radius = 3 # cm
+wand_length = 36 # cm
 
 # Iphone Config
 focal_length = 485.82423388827533
@@ -35,16 +37,21 @@ def xy_2D_to_3D(z, p) :
     return (cp[0]*z, cp[1]*z)
 
 # x = f(X/z) + cx
-def xy_3D_to_2D(X, Y, Z, cx = principal_cx, cy = principal_cy, f = focal_length) :
+def xyz_3D_to_2D(X, Y, Z, cx = principal_cx, cy = principal_cy, f = focal_length) :
     x = ((f * X) / Z) + cx
     y = ((f * Y) / Z) + cy
-    print(x)
-    print(y)
     return (int(x), int(y))
 
+def get_3D_distance(p1, p2) :
+    dx = (p1[0] - p2[0])**2
+    dy = (p1[1] - p2[1])**2
+    dz = (p1[2] - p2[2])**2
+
+    return math.sqrt(dx + dy + dz)
+
 def cv_draw_line_3D(img, p1, p2, color=(0,255,0), thickness=2) :
-    p1_2D = xy_3D_to_2D(p1[0], p1[1], p1[2])
-    p2_2D = xy_3D_to_2D(p2[0], p2[1], p2[2])
+    p1_2D = xyz_3D_to_2D(p1[0], p1[1], p1[2])
+    p2_2D = xyz_3D_to_2D(p2[0], p2[1], p2[2])
 
     cv.line(img, p1_2D, p2_2D, color, thickness)
 
@@ -86,38 +93,50 @@ def cv_draw_cube(img, X, Y, Z, side_length, color=(0,255,0), thickness=1) :
 
     return img
 
-def cv_draw_circles(circles, img_og) :
-    # Draw Circles
-    if circles is not None:
-        circles = np.uint16(np.around(circles))
+def cv_draw_circles(circles, img_og, calc_distance=False) :
+    if circles is None:
+        return img_og, None
 
-        for c in circles[0, :]:
-            circle_center = (c[0], c[1])
-            radius = c[2]
+    circles = np.uint16(np.around(circles))
+    circle_centers_3D = []
 
-            if radius > 0:
-                # Calculate circle center in 3D
-                Z = ball_z(radius)
-                X, Y = xy_2D_to_3D(Z, circle_center)
+    # Cycle through circles found in image
+    for c in circles[0, :]:
+        circle_center = (c[0], c[1])
+        radius = c[2]
 
-                # Draw circle center
-                cv.circle(img_og, circle_center, 1, (0, 100, 100), 3)
-                # Draw circle outline
-                cv.circle(img_og, circle_center, radius, (255, 0, 255), 3)
+        if radius > 0:
+            # Calculate circle center in 3D
+            Z = ball_z(radius)
+            X, Y = xy_2D_to_3D(Z, circle_center)
 
-                # Write ball distance
-                cv_write_text(img_og, str(round(Z, 2)), circle_center)
+            circle_centers_3D.append([X,Y,Z])
 
-                # Draw cube
-                cv_draw_cube(img_og, X, Y, Z, 2*ball_radius)
+            # Draw circle center
+            cv.circle(img_og, circle_center, 1, (0, 100, 100), 3)
+            # Draw circle outline
+            cv.circle(img_og, circle_center, radius, (255, 0, 255), 3)
 
-    return img_og
+            # Write ball distance
+            cv_write_text(img_og, str(round(Z, 2)), circle_center)
 
-def process_video(vpath):
+            # Draw cube
+            cv_draw_cube(img_og, X, Y, Z, 2*ball_radius)
+
+    # Calculate Distance
+    if calc_distance and len(circle_centers_3D) == 2 :
+        dist = get_3D_distance(circle_centers_3D[0], circle_centers_3D[1])
+        return img_og, dist
+
+    return img_og, None
+
+def process_video(vpath, calc_distance=False):
     cap = cv.VideoCapture(vpath)
 
     if not cap.isOpened() :
         print("Error Reading video at: " + str(sys.argv[1]))
+
+    distances = np.array([])
 
     while True :
         ret, frame = cap.read()
@@ -131,13 +150,22 @@ def process_video(vpath):
         frame_blur = cv.GaussianBlur(frame_gray, (9,9), 2)
 
         circles = cv_find_circles(frame_blur)
-        frame_circled = cv_draw_circles(circles, frame)
+        frame_circled, dist = cv_draw_circles(circles, frame, calc_distance)
+
+        if dist is not None :
+            distances = np.append(distances, dist)
 
         cv.imshow(sys.argv[1], frame_circled)
 
         # break on key press
         if cv.waitKey(frame_period) is not -1:
             break
+
+    if calc_distance :
+        mean = np.mean(distances, axis=0)
+        std = np.std(distances, axis=0)
+
+        print("Wand Distance Accuracy:\n\tmean:{}\n\tstd:{}".format(mean, std))
 
 def usage() :
     print("Usage: python main video_path")
@@ -152,9 +180,18 @@ def check_args() :
         print("Invalid Path")
         exit()
 
+    print(os.path.abspath(sys.argv[1]))
+    print(os.path.abspath(wand_path))
+
+    if os.path.abspath(sys.argv[1]) == os.path.abspath(wand_path) :
+        return True
+    return False
+
 def main():
-    check_args()
-    process_video(sys.argv[1])
+    bonus = check_args()
+    print("Bonus? {}".format(bonus))
+
+    process_video(sys.argv[1], bonus)
 
 if __name__ == "__main__" :
     main()
